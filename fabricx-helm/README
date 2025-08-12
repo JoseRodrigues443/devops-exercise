@@ -1,0 +1,499 @@
+# FabricX Microservice Fabric - Five9 Coding Assessment
+
+Kubernetes deployment and Helm chart for FabricX microservice fabric consisting of auth-service, agent-state, and interaction-service.
+
+## Project Structure
+
+```
+fabricx-helm/
+├── kubernetes/                    # Raw Kubernetes manifests
+│   ├── auth-service-deployment.yaml
+│   └── auth-service-service.yaml
+├── fabricx/                       # Helm chart
+│   ├── Chart.yaml                 # Chart metadata
+│   ├── values.yaml               # Default values
+│   └── templates/                # Helm templates
+│       ├── _helpers.tpl          # Template helpers
+│       ├── auth-service/         # Auth service resources
+│       ├── agent-state/          # Agent state resources
+│       ├── interaction-service/  # Interaction service resources
+│       ├── tests/               # Helm tests
+│       ├── configmap.yaml       # Configuration
+│       ├── networkpolicy.yaml   # Network policies
+│       └── poddisruptionbudget.yaml
+├── Makefile                      # Build automation
+└── README.md                     # This file
+```
+
+## Quick Start
+
+### Prerequisites
+- Kubernetes cluster (minikube, kind, or cloud provider)
+- Helm 3.0+
+- kubectl configured for your cluster
+
+### Option 1: Raw Kubernetes Manifests
+```bash
+# Apply manifests
+make k8s-apply
+
+# Check status
+make k8s-status
+
+# Clean up
+make k8s-delete
+```
+
+### Option 2: Helm Chart
+```bash
+# Validate chart
+make validate-all
+
+# Install chart
+make helm-install
+
+# Run tests
+make helm-test
+
+# Clean up
+make helm-uninstall
+```
+
+## Services Overview
+
+### auth-service
+- **Purpose**: Handles user authentication
+- **Image**: `fabricx/auth:1.0`
+- **Port**: 8080
+- **Replicas**: 3 (default)
+
+### agent-state
+- **Purpose**: Manages agent state
+- **Image**: `fabricx/agent-state:1.0`
+- **Port**: 8081
+- **Replicas**: 2 (default)
+
+### interaction-service
+- **Purpose**: Manages interaction state
+- **Image**: `fabricx/interaction-service:1.0`
+- **Port**: 8082
+- **Replicas**: 2 (default)
+
+## Helm Chart Configuration
+
+### Default Values
+```yaml
+authService:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: fabricx/auth
+    tag: "1.0"
+  service:
+    port: 8080
+
+agentState:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: fabricx/agent-state
+    tag: "1.0"
+  service:
+    port: 8081
+
+interactionService:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: fabricx/interaction-service
+    tag: "1.0"
+  service:
+    port: 8082
+```
+
+### Customization Examples
+```bash
+# Custom replica counts
+helm install fabricx ./fabricx \
+  --set authService.replicaCount=5 \
+  --set agentState.replicaCount=3
+
+# Custom image tags
+helm install fabricx ./fabricx \
+  --set authService.image.tag=1.1 \
+  --set agentState.image.tag=1.2
+
+# Enable monitoring
+helm install fabricx ./fabricx \
+  --set monitoring.enabled=true \
+  --set monitoring.serviceMonitor.enabled=true
+```
+
+## Development Commands
+
+### Chart Validation
+```bash
+make helm-lint          # Lint Helm chart
+make helm-template      # Render templates
+make helm-dry-run       # Dry run install
+make validate-all       # Complete validation
+```
+
+### Deployment
+```bash
+make deploy-dev         # Deploy to development
+make deploy-prod        # Deploy to production
+make helm-install       # Basic install
+make helm-install-wait  # Install with wait
+```
+
+### Testing
+```bash
+make helm-test          # Run Helm tests
+make helm-test-logs     # Run tests with logs
+make test-connectivity  # Test service connectivity
+make test-all-services  # Test all endpoints
+```
+
+### Operations
+```bash
+make helm-upgrade       # Upgrade release
+make helm-rollback      # Rollback to previous version
+make restart-all        # Restart all deployments
+make scale-up           # Scale up all services
+make scale-down         # Scale down all services
+```
+
+### Monitoring
+```bash
+make k8s-status         # Show resource status
+make k8s-logs           # Show all logs
+make k8s-pods           # Show pods
+make rollout-status     # Check rollout status
+```
+
+### Individual Service Operations
+```bash
+make upgrade-auth            # Upgrade auth-service only
+make upgrade-agent-state     # Upgrade agent-state only
+make upgrade-interaction     # Upgrade interaction-service only
+make k8s-logs-auth          # Show auth-service logs
+make debug-auth             # Debug auth-service issues
+```
+
+## Service Communication
+
+### Internal DNS
+Services communicate using Kubernetes DNS:
+- `fabricx-auth-service:8080`
+- `fabricx-agent-state:8081`
+- `fabricx-interaction-service:8082`
+
+### Health Checks
+All services include:
+- **Liveness Probe**: `/health` endpoint
+- **Readiness Probe**: `/ready` endpoint
+- **Startup Delay**: 30 seconds for liveness, 5 seconds for readiness
+
+### Network Policies
+Optional network policies restrict traffic to:
+- Inter-service communication within the fabric
+- External DNS resolution
+- No other external traffic
+
+## Helm Tests
+
+### Connectivity Test
+The chart includes a connectivity test that:
+1. Verifies DNS resolution for all services
+2. Tests HTTP connectivity to health endpoints
+3. Validates service discovery functionality
+
+```bash
+# Run connectivity test
+make helm-test
+
+# View test results
+kubectl get pods -l app.kubernetes.io/instance=fabricx
+```
+
+## Zero-Downtime Deployment Strategy
+
+### Rolling Updates
+Default Kubernetes rolling update strategy:
+- **Max Unavailable**: 25% of replicas
+- **Max Surge**: 25% additional replicas
+- **Progress Timeout**: 600 seconds
+
+### Deployment Process
+```bash
+# Atomic upgrade (rollback on failure)
+make helm-upgrade-atomic
+
+# Staged upgrade with verification
+helm upgrade fabricx ./fabricx --wait --timeout=600s
+make rollout-status
+make helm-test
+```
+
+### Rollback Process
+```bash
+# Automatic rollback on failure
+make helm-rollback
+
+# Manual rollback to specific version
+helm rollback fabricx 2
+```
+
+## Advanced Features
+
+### Horizontal Pod Autoscaling
+```yaml
+# Enable HPA in values.yaml
+authService:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+```
+
+### Pod Disruption Budgets
+Ensure minimum availability during updates:
+```yaml
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+```
+
+### Resource Management
+```yaml
+authService:
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+```
+
+## Production Configuration
+
+### Security Context
+```yaml
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 2000
+
+podSecurityContext:
+  fsGroup: 2000
+```
+
+### Monitoring Integration
+```yaml
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+```
+
+### Ingress Configuration
+```yaml
+ingress:
+  enabled: true
+  className: "nginx"
+  hosts:
+    - host: fabricx.local
+      paths:
+        - path: /auth
+          service: auth-service
+        - path: /agent-state
+          service: agent-state
+        - path: /interaction
+          service: interaction-service
+```
+
+## Environment-Specific Deployments
+
+### Development
+```bash
+# Minimal resources, single replicas
+make deploy-dev
+```
+
+### Staging
+```bash
+# Production-like configuration
+helm install fabricx ./fabricx \
+  --namespace staging \
+  --create-namespace \
+  --values values-staging.yaml
+```
+
+### Production
+```bash
+# Full production deployment
+make deploy-prod
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### Pods Not Starting
+```bash
+make debug-auth
+kubectl describe pod <pod-name>
+kubectl logs <pod-name> --previous
+```
+
+#### Service Communication Issues
+```bash
+make test-connectivity
+kubectl exec -it <pod-name> -- nslookup fabricx-auth-service
+```
+
+#### Resource Constraints
+```bash
+kubectl top nodes
+kubectl top pods
+kubectl describe nodes
+```
+
+### Port Forwarding for Local Access
+```bash
+make k8s-port-forward-auth      # Access auth-service locally
+make k8s-port-forward-agent     # Access agent-state locally
+make k8s-port-forward-interaction # Access interaction-service locally
+```
+
+### Log Analysis
+```bash
+make k8s-logs                   # All service logs
+make k8s-logs-auth             # Auth service logs only
+kubectl logs -l app.kubernetes.io/instance=fabricx -f
+```
+
+## Chart Development
+
+### Template Structure
+```
+templates/
+├── _helpers.tpl                # Common template functions
+├── auth-service/
+│   ├── deployment.yaml         # Auth service deployment
+│   └── service.yaml           # Auth service service
+├── agent-state/
+│   ├── deployment.yaml         # Agent state deployment
+│   └── service.yaml           # Agent state service
+└── tests/
+    └── connectivity-test.yaml  # Helm test pod
+```
+
+### Helper Functions
+```yaml
+# Common labels
+{{- include "fabricx.labels" . }}
+
+# Selector labels
+{{- include "fabricx.selectorLabels" . }}
+
+# Full name
+{{- include "fabricx.fullname" . }}
+```
+
+### Testing Templates
+```bash
+# Test specific template
+helm template fabricx ./fabricx -s templates/auth-service/deployment.yaml
+
+# Test with different values
+helm template fabricx ./fabricx --set authService.replicaCount=5
+```
+
+## CI/CD Integration
+
+### Validation Pipeline
+```bash
+make helm-lint
+make helm-template
+make validate-all
+```
+
+### Deployment Pipeline
+```bash
+make helm-upgrade-atomic
+make helm-test
+make rollout-status
+```
+
+### Package and Distribute
+```bash
+make package
+helm repo index .
+```
+
+## Monitoring and Observability
+
+### Prometheus Integration
+```yaml
+# ServiceMonitor for Prometheus
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /metrics
+```
+
+### Grafana Dashboards
+Pre-configured dashboards for:
+- Service health and availability
+- Resource utilization
+- Request latency and throughput
+- Error rates
+
+### Log Aggregation
+Structured logging with:
+- Centralized log collection
+- Service correlation IDs
+- Error tracking and alerting
+
+## Performance Considerations
+
+### Resource Allocation
+- **Requests**: Guaranteed resources
+- **Limits**: Maximum allowed usage
+- **Quality of Service**: Burstable class by default
+
+### Scaling Strategy
+- **Horizontal**: Add more pod replicas
+- **Vertical**: Increase pod resources
+- **Auto-scaling**: Based on CPU/memory metrics
+
+### Network Optimization
+- **Service Mesh**: Consider Istio for advanced traffic management
+- **Load Balancing**: Round-robin by default
+- **Circuit Breakers**: Implement for resilience
+
+## Security Best Practices
+
+### Network Policies
+Restrict traffic between services and external communication.
+
+### Pod Security
+- Non-root user execution
+- Read-only root filesystem where possible
+- Security context constraints
+
+### Secrets Management
+- Kubernetes secrets for sensitive data
+- External secret management integration
+- Regular secret rotation
+
+## License
+
+This project is part of the Five9 coding assessment.

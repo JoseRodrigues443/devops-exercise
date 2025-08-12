@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "fabricx.fullname" . }}-connectivity-test"
+  labels:
+    {{- include "fabricx.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  containers:
+  - name: connectivity-test
+    image: busybox:1.35
+    command:
+    - /bin/sh
+    - -c
+    - |
+      set -e
+      echo "Testing connectivity from auth-service to agent-state..."
+      
+      # Test DNS resolution
+      nslookup {{ include "fabricx.fullname" . }}-agent-state
+      
+      # Test HTTP connectivity
+      wget --spider --timeout=30 http://{{ include "fabricx.fullname" . }}-agent-state:{{ .Values.agentState.service.port }}/health
+      
+      echo "Connectivity test passed!"

@@ -1,0 +1,19 @@
+{{- if .Values.agentState.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fabricx.fullname" . }}-agent-state
+  labels:
+    {{- include "fabricx.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent-state
+spec:
+  type: {{ .Values.agentState.service.type }}
+  ports:
+  - port: {{ .Values.agentState.service.port }}
+    targetPort: {{ .Values.agentState.service.targetPort }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "fabricx.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: agent-state
+{{- end }}

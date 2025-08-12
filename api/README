@@ -1,0 +1,332 @@
+# Agent State API - Five9 Coding Assessment
+
+.NET 8 REST API for managing call center agent state events with PostgreSQL integration.
+
+## Project Structure
+
+```
+AgentStateAPI/
+├── AgentStateAPI/                 # Main API project
+│   ├── Controllers/               # API controllers
+│   ├── Models/                    # Data models
+│   ├── Data/                      # Entity Framework context
+│   ├── Services/                  # Business logic services
+│   ├── Exceptions/                # Custom exceptions
+│   └── Program.cs                 # Application entry point
+├── AgentStateAPI.Tests/           # Unit tests
+├── docker-compose.yml             # Docker services
+├── Dockerfile                     # Production image
+├── Dockerfile.dev                 # Development image
+├── Makefile                       # Build automation
+└── README.md                      # This file
+```
+
+## Quick Start
+
+### Prerequisites
+- .NET 8 SDK
+- PostgreSQL 15+
+- Docker (optional)
+
+### Option 1: Local Development
+```bash
+# Setup project
+make setup
+
+# Start database
+make db-start
+make db-setup
+
+# Run with hot reload
+make dev
+```
+
+### Option 2: Docker Development
+```bash
+# Start development environment
+make docker-compose-up-dev
+
+# View logs
+make docker-compose-logs
+```
+
+### Option 3: Gitpod
+```bash
+# Full environment setup
+make gitpod-setup
+
+# Start development
+make dev
+```
+
+## API Endpoints
+
+### POST /api/agentstate/events
+Process agent state events.
+
+**Request Body:**
+```json
+{
+  "agentId": "6B29FC40-CA47-1067-B31D-00DD010662DA",
+  "agentName": "john smith",
+  "timestampUtc": "2023-04-23T18:25:43.511Z",
+  "action": "CALL_STARTED",
+  "queueIds": [
+    "3a8cc33a-3f09-4ce5-9c53-e94585a410c8",
+    "3d887de3-8351-4391-b155-e174f472456a"
+  ]
+}
+```
+
+**Responses:**
+- `200 OK` - Event processed successfully
+- `400 Bad Request` - Invalid request or late event (>1 hour old)
+- `500 Internal Server Error` - Server error
+
+## Business Rules
+
+1. **Late Events**: Events older than 1 hour throw `LateEventException` (400 response)
+2. **Lunch Break**: `START_DO_NOT_DISTURB` between 11AM-1PM UTC sets state to `ON_LUNCH`
+3. **Call Handling**: `CALL_STARTED` action sets state to `ON_CALL`
+4. **Skill Sync**: Agent skills are synchronized with `queueIds` array
+
+## Agent States
+- `AVAILABLE` - Default state
+- `ON_CALL` - Agent is handling a call
+- `ON_LUNCH` - Agent is on lunch break
+- `DO_NOT_DISTURB` - Agent is unavailable
+
+## Database Schema
+
+### Agents Table
+- `Id` (UUID) - Primary key
+- `Name` (string) - Agent name
+- `State` (enum) - Current agent state
+- `LastUpdatedUtc` (datetime) - Last update timestamp
+
+### AgentSkills Table
+- `Id` (int) - Primary key
+- `AgentId` (UUID) - Foreign key to Agents
+- `QueueId` (UUID) - Queue identifier
+
+## Development Commands
+
+### Project Management
+```bash
+make setup          # Initialize project
+make install        # Restore packages
+make build          # Build solution
+make build-release  # Build for production
+make clean          # Clean artifacts
+```
+
+### Development
+```bash
+make dev            # Start with hot reload
+make run            # Start without hot reload
+make dev-flow       # Full development workflow
+```
+
+### Testing
+```bash
+make test           # Run unit tests
+make test-verbose   # Run tests with verbose output
+make test-api       # Test API endpoints
+make test-api-lunch # Test lunch scenario
+make test-api-late  # Test late event scenario
+```
+
+### Database
+```bash
+make db-start       # Start PostgreSQL
+make db-setup       # Create database and user
+make db-migrate     # Apply EF migrations
+make db-reset       # Reset database
+make db-connect     # Connect to database
+```
+
+### Docker
+```bash
+make docker-build              # Build production image
+make docker-compose-up-dev     # Start development stack
+make docker-compose-up-all     # Start full stack with monitoring
+make docker-compose-logs       # View logs
+make docker-clean              # Clean Docker resources
+```
+
+## Configuration
+
+### Connection String
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Database=agentstate;Username=postgres;Password=yourpassword"
+  }
+}
+```
+
+### Environment Variables
+```bash
+ASPNETCORE_ENVIRONMENT=Development
+ConnectionStrings__DefaultConnection="Host=localhost;Database=agentstate;Username=postgres;Password=yourpassword"
+```
+
+## Docker Services
+
+### Development Stack
+- **API**: http://localhost:5000 (with hot reload)
+- **PostgreSQL**: localhost:5432
+- **PgAdmin**: http://localhost:5050 (admin/admin)
+
+### Full Stack (with monitoring)
+- **API**: http://localhost:8080
+- **PostgreSQL**: localhost:5432
+- **Redis**: localhost:6379
+- **Prometheus**: http://localhost:9090
+- **Grafana**: http://localhost:3000 (admin/admin)
+- **Seq Logging**: http://localhost:5341
+- **Nginx Proxy**: http://localhost:80
+
+## Testing Examples
+
+### Valid Event
+```bash
+curl -X POST "http://localhost:5000/api/agentstate/events" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agentId": "6B29FC40-CA47-1067-B31D-00DD010662DA",
+    "agentName": "john smith",
+    "timestampUtc": "2023-04-23T18:25:43.511Z",
+    "action": "CALL_STARTED",
+    "queueIds": ["3a8cc33a-3f09-4ce5-9c53-e94585a410c8"]
+  }'
+```
+
+### Lunch Break Event
+```bash
+curl -X POST "http://localhost:5000/api/agentstate/events" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agentId": "6B29FC40-CA47-1067-B31D-00DD010662DA",
+    "agentName": "lunch agent",
+    "timestampUtc": "2023-04-23T12:00:00.000Z",
+    "action": "START_DO_NOT_DISTURB",
+    "queueIds": []
+  }'
+```
+
+### Late Event (will fail)
+```bash
+curl -X POST "http://localhost:5000/api/agentstate/events" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agentId": "6B29FC40-CA47-1067-B31D-00DD010662DA",
+    "agentName": "late agent",
+    "timestampUtc": "2023-04-23T10:00:00.000Z",
+    "action": "CALL_STARTED",
+    "queueIds": []
+  }'
+```
+
+## Architecture Decisions
+
+### Entity Framework Core
+- Code-first approach with migrations
+- PostgreSQL provider for robust data handling
+- Include/navigation properties for efficient querying
+
+### Service Layer Pattern
+- Business logic separated from controllers
+- Dependency injection for testability
+- Async/await for database operations
+
+### Exception Handling
+- Custom `LateEventException` for business rule violations
+- Global exception handling in controllers
+- Structured logging for debugging
+
+### Skill Synchronization
+- Full sync approach ensures data consistency
+- Efficient add/remove operations
+- Maintains referential integrity
+
+## Production Considerations
+
+### Security
+- Input validation with model attributes
+- SQL injection protection via EF Core
+- Non-root user in Docker container
+- Environment-based configuration
+
+### Performance
+- Async database operations
+- Connection pooling
+- Efficient skill synchronization
+- Index on AgentId + QueueId
+
+### Monitoring
+- Health check endpoints
+- Structured logging with Seq
+- Prometheus metrics ready
+- Docker health checks
+
+### Scalability
+- Stateless API design
+- Database connection pooling
+- Containerized deployment
+- Horizontal scaling ready
+
+## Troubleshooting
+
+### PostgreSQL Issues
+```bash
+# Check status
+sudo service postgresql status
+
+# Start service
+sudo service postgresql start
+
+# Reset database
+make db-reset
+```
+
+### Port Conflicts
+```bash
+# Check port usage
+netstat -tulpn | grep :5000
+
+# Kill process
+sudo kill -9 <PID>
+```
+
+### Docker Issues
+```bash
+# Clean everything
+make docker-clean
+
+# Rebuild images
+make docker-build
+make docker-build-dev
+```
+
+### Package Issues
+```bash
+# Clear NuGet cache
+dotnet nuget locals all --clear
+
+# Force restore
+dotnet restore --force
+```
+
+## Development Workflow
+
+1. **Setup**: `make setup`
+2. **Database**: `make db-setup`
+3. **Develop**: `make dev`
+4. **Test**: `make test`
+5. **API Test**: `make test-api`
+6. **Deploy**: `make docker-build`
+
+## License
+
+This project is part of the Five9 coding assessment.

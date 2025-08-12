@@ -1,0 +1,60 @@
+{{- if .Values.agentState.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fabricx.fullname" . }}-agent-state
+  labels:
+    {{- include "fabricx.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent-state
+spec:
+  replicas: {{ .Values.agentState.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "fabricx.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: agent-state
+  template:
+    metadata:
+      labels:
+        {{- include "fabricx.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: agent-state
+    spec:
+      containers:
+      - name: agent-state
+        image: "{{ .Values.agentState.image.repository }}:{{ .Values.agentState.image.tag }}"
+        imagePullPolicy: {{ .Values.agentState.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.agentState.service.targetPort }}
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.agentState.resources | nindent 10 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

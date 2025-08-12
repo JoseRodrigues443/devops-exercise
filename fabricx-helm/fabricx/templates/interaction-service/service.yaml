@@ -1,0 +1,19 @@
+{{- if .Values.interactionService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fabricx.fullname" . }}-interaction-service
+  labels:
+    {{- include "fabricx.labels" . | nindent 4 }}
+    app.kubernetes.io/component: interaction-service
+spec:
+  type: {{ .Values.interactionService.service.type }}
+  ports:
+  - port: {{ .Values.interactionService.service.port }}
+    targetPort: {{ .Values.interactionService.service.targetPort }}
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "fabricx.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: interaction-service
+{{- end }}
